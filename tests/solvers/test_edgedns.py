@@ -5,7 +5,7 @@ from importlib_metadata import entry_points
 from pydantic import ValidationError
 
 from certwrangler.exceptions import SolverError
-from certwrangler.solvers.edgedns import ENDPOINT_PATTERN, EdgeDNSSolver
+from certwrangler.solvers.edgedns import EdgeDNSSolver
 
 
 class TestEdgeDNSSolver:
@@ -20,18 +20,26 @@ class TestEdgeDNSSolver:
         (plugin,) = entry_points(group="certwrangler.solver", name="edgedns")
         assert plugin.load() == EdgeDNSSolver
 
-    def test_ENDPOINT_PATTERN(self):
+    @pytest.mark.parametrize(
+        ["api_endpoint", "name"],
+        [
+            (
+                "https://dummyapi.example.com/config-dns/v2/zones/example.com/names/example.com/types/TXT",
+                "",
+            ),
+            (
+                "https://dummyapi.example.com/config-dns/v2/zones/example.com/names/_acme-challenge.example.com/types/TXT",
+                "_acme-challenge",
+            ),
+        ],
+    )
+    def test_endpoint_pattern(self, click_ctx, solver_edgedns, api_endpoint, name):
         """
         Test that the endpoint pattern renders as expected.
         """
-        assert (
-            ENDPOINT_PATTERN.format(
-                host="dummyapi.example.com",
-                domain="example.com",
-                name="_acme-challenge",
-            )
-            == "https://dummyapi.example.com/config-dns/v2/zones/example.com/names/_acme-challenge.example.com/types/TXT"
-        )
+        solver_edgedns.initialize()
+        endpoint = solver_edgedns._get_endpoint(name, "example.com")
+        assert endpoint == api_endpoint
 
     def test_config_invalid_host(self, click_ctx, solver_edgedns_config):
         """
@@ -86,7 +94,7 @@ class TestEdgeDNSSolver:
             "name": "_acme-challenge",
             "content": "test content",
         }
-        endpoint = ENDPOINT_PATTERN.format(host=solver_edgedns.host, **kwargs)
+        endpoint = solver_edgedns._get_endpoint(kwargs["name"], kwargs["domain"])
 
         def _post_callback(request, context):
             assert request.json() == {
@@ -114,7 +122,7 @@ class TestEdgeDNSSolver:
             "name": "_acme-challenge",
             "content": "test content",
         }
-        endpoint = ENDPOINT_PATTERN.format(host=solver_edgedns.host, **kwargs)
+        endpoint = solver_edgedns._get_endpoint(kwargs["name"], kwargs["domain"])
 
         def _put_callback(request, context):
             assert request.json() == {
@@ -151,7 +159,7 @@ class TestEdgeDNSSolver:
             "name": "_acme-challenge",
             "content": "test content",
         }
-        endpoint = ENDPOINT_PATTERN.format(host=solver_edgedns.host, **kwargs)
+        endpoint = solver_edgedns._get_endpoint(kwargs["name"], kwargs["domain"])
 
         requests_mock.get(
             endpoint,
@@ -177,7 +185,7 @@ class TestEdgeDNSSolver:
             "name": "_acme-challenge",
             "content": "test content",
         }
-        endpoint = ENDPOINT_PATTERN.format(host=solver_edgedns.host, **kwargs)
+        endpoint = solver_edgedns._get_endpoint(kwargs["name"], kwargs["domain"])
 
         requests_mock.get(
             endpoint,
@@ -204,7 +212,7 @@ class TestEdgeDNSSolver:
             "name": "_acme-challenge",
             "content": "test content",
         }
-        endpoint = ENDPOINT_PATTERN.format(host=solver_edgedns.host, **kwargs)
+        endpoint = solver_edgedns._get_endpoint(kwargs["name"], kwargs["domain"])
 
         requests_mock.get(
             endpoint,
@@ -232,7 +240,7 @@ class TestEdgeDNSSolver:
             "name": "_acme-challenge",
             "content": "test content",
         }
-        endpoint = ENDPOINT_PATTERN.format(host=solver_edgedns.host, **kwargs)
+        endpoint = solver_edgedns._get_endpoint(kwargs["name"], kwargs["domain"])
 
         def _put_callback(request, context):
             assert request.json() == {
@@ -269,7 +277,7 @@ class TestEdgeDNSSolver:
             "name": "_acme-challenge",
             "content": "test content",
         }
-        endpoint = ENDPOINT_PATTERN.format(host=solver_edgedns.host, **kwargs)
+        endpoint = solver_edgedns._get_endpoint(kwargs["name"], kwargs["domain"])
 
         requests_mock.get(endpoint, status_code=404)
         solver_edgedns.delete(**kwargs)
@@ -286,7 +294,7 @@ class TestEdgeDNSSolver:
             "name": "_acme-challenge",
             "content": "test content",
         }
-        endpoint = ENDPOINT_PATTERN.format(host=solver_edgedns.host, **kwargs)
+        endpoint = solver_edgedns._get_endpoint(kwargs["name"], kwargs["domain"])
 
         requests_mock.get(
             endpoint,
@@ -312,7 +320,7 @@ class TestEdgeDNSSolver:
             "name": "_acme-challenge",
             "content": "test content",
         }
-        endpoint = ENDPOINT_PATTERN.format(host=solver_edgedns.host, **kwargs)
+        endpoint = solver_edgedns._get_endpoint(kwargs["name"], kwargs["domain"])
 
         requests_mock.get(
             endpoint,
@@ -351,8 +359,8 @@ class TestEdgeDNSSolver:
         Test that we can issue a well-formed DELETE.
         """
         solver_edgedns.initialize()
-        endpoint = ENDPOINT_PATTERN.format(
-            host=solver_edgedns.host, domain="example.com", name="_acme-challenge"
+        endpoint = solver_edgedns._get_endpoint(
+            name="_acme-challenge", domain="example.com"
         )
 
         # test that 404 and 403 raise exceptions
@@ -388,8 +396,8 @@ class TestEdgeDNSSolver:
         Test that we can issue a well-formed GET.
         """
         solver_edgedns.initialize()
-        endpoint = ENDPOINT_PATTERN.format(
-            host=solver_edgedns.host, domain="example.com", name="_acme-challenge"
+        endpoint = solver_edgedns._get_endpoint(
+            name="_acme-challenge", domain="example.com"
         )
 
         # test that 404 returns None
@@ -427,8 +435,8 @@ class TestEdgeDNSSolver:
         Test that we can issue a well-formed POST.
         """
         solver_edgedns.initialize()
-        endpoint = ENDPOINT_PATTERN.format(
-            host=solver_edgedns.host, domain="example.com", name="_acme-challenge"
+        endpoint = solver_edgedns._get_endpoint(
+            name="_acme-challenge", domain="example.com"
         )
 
         # test that 403 raises an exception
@@ -461,8 +469,8 @@ class TestEdgeDNSSolver:
         Test that we can issue a well-formed PUT.
         """
         solver_edgedns.initialize()
-        endpoint = ENDPOINT_PATTERN.format(
-            host=solver_edgedns.host, domain="example.com", name="_acme-challenge"
+        endpoint = solver_edgedns._get_endpoint(
+            name="_acme-challenge", domain="example.com"
         )
 
         # test that 403 raises an exception

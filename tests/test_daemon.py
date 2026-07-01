@@ -123,12 +123,14 @@ class TestWebServerThread:
         """
         Test that the WebServerThread works as expected.
         """
+        is_alive_event = threading.Event()
 
         class FakeServer:
             def __init__(self):
                 self.should_exit = False
 
             async def serve(self):
+                is_alive_event.set()
                 while not self.should_exit:
                     await asyncio.sleep(0.1)
 
@@ -139,9 +141,7 @@ class TestWebServerThread:
         thread = WebServerThread()
         thread.start()
         assert thread.is_alive()
-        while thread.loop is None or not thread.loop.is_running():
-            # wait for the loop to start up before we try to kill it
-            time.sleep(0.1)
+        is_alive_event.wait(timeout=5)
         mocked_create_http_server.assert_called_once()
         assert not fake_server.should_exit
         thread.graceful_stop()

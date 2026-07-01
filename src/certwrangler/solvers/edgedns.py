@@ -17,16 +17,6 @@ from certwrangler.types import Domain
 log = logging.getLogger(__name__)
 
 
-# Docs for this endpoint:
-#   https://techdocs.akamai.com/edge-dns/reference/delete-zone-name-type
-#   https://techdocs.akamai.com/edge-dns/reference/get-zone-name-type
-#   https://techdocs.akamai.com/edge-dns/reference/post-zones-zone-names-name-types-type
-#   https://techdocs.akamai.com/edge-dns/reference/put-zones-zone-names-name-types-type
-ENDPOINT_PATTERN = (
-    "https://{host}/config-dns/v2/zones/{domain}/names/{name}.{domain}/types/TXT"
-)
-
-
 class EdgeDNSSolver(Solver):
     """
     Solver powered by Akamai Edge DNS.
@@ -60,13 +50,13 @@ class EdgeDNSSolver(Solver):
         log.info(
             f"Solver '{self.name}' creating TXT '{name}' zone '{domain}' - '{content}'..."
         )
-        endpoint = ENDPOINT_PATTERN.format(host=self.host, domain=domain, name=name)
+        endpoint = self._get_endpoint(name, domain)
         log.debug(f"Sending GET to '{endpoint}' to get current TXT record.")
         record = self._get(endpoint)
         log.debug(f"Got '{record}' from '{endpoint}'.")
         if record is None:
             record = {
-                "name": f"{name}.{domain}",
+                "name": f"{name}.{domain}" if name else domain,
                 "type": "TXT",
                 "ttl": 300,
                 "rdata": [content],
@@ -96,7 +86,7 @@ class EdgeDNSSolver(Solver):
         log.info(
             f"Solver '{self.name}' deleting TXT '{name}' zone '{domain}' - '{content}'..."
         )
-        endpoint = ENDPOINT_PATTERN.format(host=self.host, domain=domain, name=name)
+        endpoint = self._get_endpoint(name, domain)
         log.debug(f"Sending GET to '{endpoint}' to get current TXT record.")
         record = self._get(endpoint)
         log.debug(f"Got '{record}' from '{endpoint}'.")
@@ -208,3 +198,19 @@ class EdgeDNSSolver(Solver):
         except RequestException as error:
             raise SolverError(error) from error
         return self._cleanup_response(response.json())
+
+    def _get_endpoint(self, name: str, domain: str) -> str:
+        """
+        Build the TXT record endpoint for EdgeDNS.
+
+        Docs for this endpoint:
+        https://techdocs.akamai.com/edge-dns/reference/delete-zone-name-type
+        https://techdocs.akamai.com/edge-dns/reference/get-zone-name-type
+        https://techdocs.akamai.com/edge-dns/reference/post-zones-zone-names-name-types-type
+        https://techdocs.akamai.com/edge-dns/reference/put-zones-zone-names-name-types-type
+        """
+        return (
+            f"https://{self.host}/config-dns/v2/zones/{domain}/names/{name}.{domain}/types/TXT"
+            if name
+            else f"https://{self.host}/config-dns/v2/zones/{domain}/names/{domain}/types/TXT"
+        )

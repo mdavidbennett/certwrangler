@@ -448,6 +448,68 @@ class TestCertController:
         ]
         cert_controller.finalize_order.assert_called_once()
 
+    def test_process_challenges_root_level_cname(
+        self, cert_controller, cert, cert_state_order, mocker, caplog
+    ):
+        """
+        Test that we can process an order's challenges.
+        """
+        mocked_challenge_1 = mocker.MagicMock()
+        mocked_challenge_1.response = mocker.MagicMock(return_value="dummy_response_1")
+        mocked_challenge_2 = mocker.MagicMock()
+        mocked_challenge_2.response = mocker.MagicMock(return_value="dummy_response_2")
+        cert_controller._get_challenges = mocker.MagicMock(
+            return_value=[
+                ("example.com", mocked_challenge_1),
+                ("www.example.com", mocked_challenge_2),
+            ]
+        )
+        mock_solver = mocker.MagicMock()
+        cert_controller._get_dns_records = mocker.MagicMock(
+            return_value=[
+                ("", "acme-challenges.example.com", "test123", mock_solver),
+                ("_acme-challenge.www", "example.com", "test123", mock_solver),
+            ]
+        )
+        wait_for_challenges_mock = mocker.MagicMock()
+        mocker.patch(
+            "certwrangler.controllers.wait_for_challenges", wait_for_challenges_mock
+        )
+        cert_controller.client.answer_challenge = mocker.MagicMock()
+        mocker.patch(
+            "acme.challenges.DNS01.response",
+            mocker.MagicMock(return_value="dummy_response"),
+        )
+        cert_controller.client.poll_authorizations = mocker.MagicMock()
+        cert_controller.finalize_order = mocker.MagicMock()
+        cert_controller.process_challenges()
+        cert_controller._get_dns_records.assert_called_once()
+        assert mock_solver.create.call_args_list == [
+            mocker.call("", "acme-challenges.example.com", "test123"),
+            mocker.call("_acme-challenge.www", "example.com", "test123"),
+        ]
+        assert (
+            "DNS records created for cert 'test_cert', waiting max 300 seconds..."
+            in caplog.text
+        )
+        wait_for_challenges_mock.assert_called_once_with(
+            [
+                ("acme-challenges.example.com", "test123"),
+                ("_acme-challenge.www.example.com", "test123"),
+            ],
+            datetime.timedelta(seconds=300),
+        )
+
+        assert mock_solver.create.call_args_list == [
+            mocker.call("", "acme-challenges.example.com", "test123"),
+            mocker.call("_acme-challenge.www", "example.com", "test123"),
+        ]
+        assert cert_controller.client.answer_challenge.call_args_list == [
+            mocker.call(mocked_challenge_1, "dummy_response_1"),
+            mocker.call(mocked_challenge_2, "dummy_response_2"),
+        ]
+        cert_controller.finalize_order.assert_called_once()
+
     def test_process_challenges_ValidationError(
         self, cert_controller, cert, cert_state_order, mocker, caplog
     ):

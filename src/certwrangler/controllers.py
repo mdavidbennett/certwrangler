@@ -348,7 +348,10 @@ class CertController:
         )
         try:
             wait_for_challenges(
-                [(f"{name}.{zone}", token) for name, zone, token, _ in dns_records],
+                [
+                    (f"{name}.{zone}" if name else zone, token)
+                    for name, zone, token, _ in dns_records
+                ],
                 wait_timeout,
             )
         except TimeoutError as error:
